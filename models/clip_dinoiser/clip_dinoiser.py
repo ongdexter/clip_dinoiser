@@ -12,7 +12,7 @@ import torchvision.transforms as T
 from mmseg.ops import resize
 from omegaconf import OmegaConf
 
-from models.builder import MODELS, build_model
+from ..builder import MODELS, build_model
 
 NORMALIZE = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
@@ -283,13 +283,13 @@ class CLIP_DINOiser(DinoCLIP):
         # Get the predictions --------------------------------------------------
         output = self.clip_backbone.decode_head.cls_seg(out_feats)
 
-        if self.apply_found:
-            # Compute FOUND --------------------------------------------------
-            soft_found = torch.sigmoid(preds.detach())
-            r_soft_found = soft_found.reshape(-1)
-            nb_cls = output.shape[1]
-            r_hard_found = (r_soft_found > 0.5).float()
-            uncertain = (output.max(dim=1)[0] < self.delta).reshape(-1)
-            output.reshape(1, nb_cls, -1)[:, 0, uncertain & (~r_hard_found.bool())] = 1.0  # background class
+        # if self.apply_found:
+        #     # Compute FOUND --------------------------------------------------
+        #     soft_found = torch.sigmoid(preds.detach())
+        #     r_soft_found = soft_found.reshape(-1)
+        #     nb_cls = output.shape[1]
+        #     r_hard_found = (r_soft_found > 0.5).float()
+        #     uncertain = (output.max(dim=1)[0] < self.delta).reshape(-1)
+        #     output.reshape(1, nb_cls, -1)[:, 0, uncertain & (~r_hard_found.bool())] = 1.0  # background class
 
         return output
