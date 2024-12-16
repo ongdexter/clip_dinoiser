@@ -293,3 +293,21 @@ class CLIP_DINOiser(DinoCLIP):
         #     output.reshape(1, nb_cls, -1)[:, 0, uncertain & (~r_hard_found.bool())] = 1.0  # background class
 
         return output
+
+    def get_clipdino_features(self, x: torch.Tensor):
+        preds, corrs, output = self.forward_pass(x)
+        B, C, hf, wf = output.shape
+        preds = F.interpolate(preds, (hf, wf), mode="bilinear", align_corners=False)
+
+        # Compute weighted pooling --------------------------------------------------
+        if self.gamma:
+            corrs[corrs < self.gamma] = 0.0
+        out_feats = self.compute_weighted_pool(output, corrs)
+        
+        return out_feats
+    
+    def get_relevancy(self, feat: torch.Tensor):
+        output = self.clip_backbone.decode_head.cls_seg(feat)
+        
+        return output
+    
