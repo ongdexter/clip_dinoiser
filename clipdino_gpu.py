@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from PIL import Image
 import matplotlib.pyplot as plt
 from torchvision import transforms as T
-from hydra import compose, initialize
+from hydra import compose, initialize, initialize_config_dir
 from .models.builder import build_model
 from .segmentation.datasets.pascal_context import PascalContextDataset
 
@@ -15,31 +15,39 @@ def list_of_strings(arg):
     return arg.split(',')
 
 class ClipDino():
-    def __init__(self, clip_dim=512, pca_dim=12):
-        cfg = "clip_dinoiser.yaml"
-        checkpoint_path = "./checkpoints/last.pt"
-        initialize(config_path="configs", version_base=None)
-        self.cfg = compose(config_name=cfg)
+    def __init__(self, feature_mode='pca', clip_dim=512, pca_dim=12):
+        cfg="configs/clip_dinoiser.yaml"
+        self.checkpoint_path = "checkpoints/last.pt"
+        self.base_path = os.path.dirname(os.path.realpath(__file__))
+        cfg = '/' + os.path.join(self.base_path, cfg)
+        self.checkpoint_path = '/' + os.path.join(self.base_path, self.checkpoint_path)
+        with initialize_config_dir(version_base=None, config_dir='/' + self.base_path + '/configs'):
+            # Compose the configuration
+            self.cfg = compose(config_name="clip_dinoiser.yaml")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.prompts = ['keyboard']
-        if len(self.prompts) == 1:
-            self.prompts = ['background'] + self.prompts
-        self.model = build_model(self.cfg.model, class_names=self.prompts)
-        assert os.path.isfile(checkpoint_path), "Checkpoint file doesn't exist"
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        self.model.eval()
-        self.model.to(self.device)
-        if 'background' in self.prompts:
-            self.model.apply_found = True
-        else:
-            self.model.apply_found = False
+        self.set_prompt(['monitor'])
+        self.feature_mode = feature_mode
         self.clip_dim = clip_dim
         self.pca_dim = pca_dim
         self.U = None
         self.S = None
         self.V = None
         self.mean = None
+        
+    def set_prompt(self, prompt):
+        self.prompts = prompt
+        if len(self.prompts) == 1:
+            self.prompts = ['background'] + self.prompts
+        self.model = build_model(self.cfg.model, class_names=self.prompts)
+        assert os.path.isfile(self.checkpoint_path), "Checkpoint file doesn't exist"        
+        self.checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
+        self.model.load_state_dict(self.checkpoint['model_state_dict'], strict=False)
+        self.model.eval()
+        self.model.to(self.device)
+        if 'background' in self.prompts:
+            self.model.apply_found = True
+        else:
+            self.model.apply_found = False
 
     def process_image(self, img_tens):
         if len(img_tens.shape) == 3:
@@ -61,12 +69,14 @@ class ClipDino():
     
     def fit_pca(self, feat):
         # b, c, h, w
-        h, w = feat.shape[-2:]
+        self.fh, self.fw = feat.shape[-2:]
         reshaped_tensor = feat.permute(0, 2, 3, 1).reshape(-1, self.clip_dim)
         
         self.mean = reshaped_tensor.mean(dim=0)
         centered_data = reshaped_tensor - self.mean
         
+        # To obtain repeatable results, reset the seed for the pseudorandom number generator
+        torch.manual_seed(0)
         self.U, self.S, self.V = torch.pca_lowrank(centered_data, q=self.pca_dim, center=False, niter=2)
 
     def clip_to_pca(self, feat):
@@ -124,6 +134,52 @@ class ClipDino():
 
     def get_relevancy(self, feat):
         return self.model.get_relevancy(feat)
+    
+    def viz_pca_features(self, feat_pca):
+        if len(feat_pca.shape) == 3:
+            feat_pca = feat_pca.unsqueeze(0)
+        feat_pca = F.interpolate(feat_pca, size=(self.fh, self.fw), mode="bilinear", align_corners=False)        
+        relevancy_image = self.get_relevancy_from_pca(feat_pca.detach())[0][1]
+        plt.imshow(relevancy_image.detach().cpu().numpy(), cmap='jet', vmin=0, vmax=1)
+        plt.title('target')
+        plt.show()
+        
+    def viz_relevancy(self, relevancy):
+        plt.imshow(relevancy.detach().cpu().numpy(), cmap='jet', vmin=0, vmax=1)
+        plt.title('target')
+        plt.show()
+    
+    def process_features(self, img, viz=False):
+        if self.feature_mode == 'hash':
+            # get relevancy map
+            feat_clip = self.get_clipdino_features(img.unsqueeze(0))
+            
+            h, w = img.shape[-2:]
+            feat_clip = F.interpolate(feat_clip, size=(h, w), mode="bilinear", align_corners=False)
+            
+            return feat_clip
+                        
+        elif self.feature_mode == 'pca':
+            # get relevancy map
+            feat_pca = self.get_pca_features(img.unsqueeze(0))
+            
+            h, w = img.shape[-2:]
+            self.fh, self.fw = feat_pca.shape[-2:]
+            # feat_pca = F.interpolate(feat_pca, size=(h, w), mode="bilinear", align_corners=False)            
+            
+            if viz:
+                self.viz_pca_features(feat_pca)
+            
+            return feat_pca
+        
+        elif self.feature_mode == 'pca-hash':
+            # get relevancy map
+            feat_pca = self.get_pca_features(img.unsqueeze(0))
+            
+            h, w = img.shape[-2:]
+            self.fh, self.fw = feat_pca.shape[-2:]
+            
+            return feat_pca
 
 if __name__ == '__main__':
     file_paths = sorted(glob.glob('/home/odexter/datasets/tum/rgbd_dataset_freiburg1_desk/rgb/*.png'))

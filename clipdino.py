@@ -13,7 +13,7 @@ from .segmentation.datasets.pascal_context import PascalContextDataset
 from typing import List
 import glob
 from sklearn.decomposition import PCA
-from .models.gs_lerf_field import GaussianLERFField
+# from .models.gs_lerf_field import GaussianLERFField
 
 PALETTE = list(PascalContextDataset.PALETTE)
 
@@ -21,7 +21,7 @@ def list_of_strings(arg):
     return arg.split(',')
 
 class ClipDino():
-    def __init__(self, clip_dim=512, pca_dim=64):
+    def __init__(self, feature_mode='pca', clip_dim=512, pca_dim=64):
         cfg="configs/clip_dinoiser.yaml"
         checkpoint_path = "checkpoints/last.pt"
         base_path = os.path.dirname(os.path.realpath(__file__))
@@ -33,7 +33,7 @@ class ClipDino():
             # Compose the configuration
             self.cfg = compose(config_name="clip_dinoiser.yaml")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.prompts = ['keyboard']
+        self.prompts = ['monitor']
         if len(self.prompts) == 1:
             self.prompts = ['background'] + self.prompts
         self.model = build_model(self.cfg.model, class_names=self.prompts)
@@ -46,11 +46,12 @@ class ClipDino():
             self.model.apply_found = True
         else:
             self.model.apply_found = False
+        self.feature_mode = feature_mode
         self.clip_dim = clip_dim
         self.pca_dim = pca_dim
         self.pca = PCA(n_components=self.pca_dim)
-        self.hash_field = GaussianLERFField()
-        self.hash_optimizer = torch.optim.AdamW(self.hash_field.parameters(), lr=1e-3)
+        # self.hash_field = GaussianLERFField()
+        # self.hash_optimizer = torch.optim.AdamW(self.hash_field.parameters(), lr=1e-3)
         
     def process_image(self, img_tens):
         if len(img_tens.shape) == 3:
@@ -102,10 +103,55 @@ class ClipDino():
     
     def get_relevancy(self, feat):
         return self.model.get_relevancy(feat)
+    
+    def viz_pca_features(self, feat_pca):
+        if len(feat_pca.shape) == 3:
+            feat_pca = feat_pca.unsqueeze(0)
+        feat_pca = F.interpolate(feat_pca, size=(self.fh, self.fw), mode="bilinear", align_corners=False)        
+        relevancy_image = self.get_relevancy_from_pca(feat_pca.detach().cpu().numpy())[0][1]
+        plt.imshow(relevancy_image.detach().cpu().numpy(), cmap='jet', vmin=0, vmax=1)
+        plt.title('target')
+        plt.show()
+        
+    def viz_relevancy(self, relevancy):
+        plt.imshow(relevancy.detach().cpu().numpy(), cmap='jet', vmin=0, vmax=1)
+        plt.title('target')
+        plt.show()
 
+    def process_features(self, img, viz=False):
+        if self.feature_mode == 'hash':
+            # get relevancy map
+            feat_clip = self.get_clipdino_features(img.unsqueeze(0))
+            
+            h, w = img.shape[-2:]
+            feat_clip = F.interpolate(feat_clip, size=(h, w), mode="bilinear", align_corners=False)
+            
+            return feat_clip
+                        
+        elif self.feature_mode == 'pca':
+            # get relevancy map
+            feat_pca = self.get_pca_features(img.unsqueeze(0))
+            
+            h, w = img.shape[-2:]
+            self.fh, self.fw = feat_pca.shape[-2:]
+            # feat_pca = F.interpolate(feat_pca, size=(h, w), mode="bilinear", align_corners=False)            
+            
+            if viz:
+                self.viz_pca_features(feat_pca)
+            
+            return feat_pca
+        
+        elif self.feature_mode == 'pca-hash':
+            # get relevancy map
+            feat_pca = self.get_pca_features(img.unsqueeze(0))
+            
+            h, w = img.shape[-2:]
+            self.fh, self.fw = feat_pca.shape[-2:]
+            
+            return feat_pca
 
 if __name__ == '__main__':
-    file_paths = glob.glob('/home/odexter/datasets/replica/room0/results/frame*.jpg')
+    file_paths = glob.glob('/home/odexter/datasets/replica/room0/results/img')
     
     clipdino = ClipDino()
     for file_path in file_paths:
