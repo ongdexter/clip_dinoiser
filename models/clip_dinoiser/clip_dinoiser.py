@@ -36,7 +36,10 @@ class DinoCLIP(nn.Module):
         self.delta = delta
 
         # ==== build MaskCLIP backbone =====
-        maskclip_cfg = OmegaConf.load(f"configs/{clip_backbone}.yaml")
+        self.base_path = os.path.dirname(os.path.realpath(__file__))
+        cfg_path = os.path.join(self.base_path, f"../../configs/{clip_backbone}.yaml")        
+        maskclip_cfg = OmegaConf.load(cfg_path)
+        # maskclip_cfg = OmegaConf.load(f"configs/{clip_backbone}.yaml")
         self.clip_backbone = build_model(maskclip_cfg["model"], class_names=class_names)
         for param in self.clip_backbone.parameters():
             param.requires_grad = False
