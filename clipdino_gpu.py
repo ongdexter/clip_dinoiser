@@ -32,7 +32,12 @@ class ClipDino():
         self.U = None
         self.S = None
         self.V = None
-        self.mean = None
+        self.mean = None        
+        
+        # load ipca
+        data = torch.load('/bags/ipca/ipca_coco_outdoor_12.pt')
+        self.mean = torch.tensor(data['mean']).to("cuda").float()
+        self.V = torch.tensor(data['V']).to("cuda").float()
         
     def set_prompt(self, prompt):
         self.prompts = prompt
@@ -86,7 +91,7 @@ class ClipDino():
         reshaped_tensor = feat.squeeze().permute(1, 2, 0).reshape(-1, self.clip_dim)
                 
         # Compute mean and center the data
-        self.mean = reshaped_tensor.mean(dim=0)
+        # self.mean = reshaped_tensor.mean(dim=0)
         centered_data = reshaped_tensor - self.mean
 
         # # Perform PCA using torch.pca_lowrank
