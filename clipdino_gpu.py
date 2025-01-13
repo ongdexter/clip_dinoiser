@@ -98,12 +98,7 @@ class ClipDino():
         # self.U, self.S, self.V = torch.pca_lowrank(centered_data, q=self.pca_dim, center=False, niter=2)
         
         # Project the data onto the principal components
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
-        start.record()
-        reduced_tensor = torch.matmul(centered_data, self.V[:, :self.pca_dim])
-        end.record()
-        torch.cuda.synchronize()
+        reduced_tensor = torch.matmul(centered_data.float(), self.V.float().T)
         
         # Reshape back to image dimensions
         reduced_tensor = reduced_tensor.reshape(h, w, self.pca_dim)
@@ -116,7 +111,7 @@ class ClipDino():
         reduced_feat = reduced_feat.squeeze().permute(1, 2, 0).reshape(-1, self.pca_dim)
         
         # Invert the PCA transformation
-        recovered_feat = torch.matmul(reduced_feat, self.V[:, :self.pca_dim].t())
+        recovered_feat = torch.matmul(reduced_feat, self.V)
         
         # Add back the mean
         recovered_feat += self.mean
