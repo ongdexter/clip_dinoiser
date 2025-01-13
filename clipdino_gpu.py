@@ -104,7 +104,6 @@ class ClipDino():
         reduced_tensor = torch.matmul(centered_data, self.V[:, :self.pca_dim])
         end.record()
         torch.cuda.synchronize()
-        print('projection:', start.elapsed_time(end))
         
         # Reshape back to image dimensions
         reduced_tensor = reduced_tensor.reshape(h, w, self.pca_dim)
