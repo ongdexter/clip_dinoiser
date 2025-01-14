@@ -15,7 +15,7 @@ def list_of_strings(arg):
     return arg.split(',')
 
 class ClipDino():
-    def __init__(self, feature_mode='pca', clip_dim=512, pca_dim=12):
+    def __init__(self, feature_mode='pca', clip_dim=512, pca_dim=12, data_path='/home/odexter/Downloads/ipca_coco_outdoor_24.pt'):
         cfg="configs/clip_dinoiser.yaml"
         self.checkpoint_path = "checkpoints/last.pt"
         self.base_path = os.path.dirname(os.path.realpath(__file__))
@@ -35,14 +35,15 @@ class ClipDino():
         self.mean = None        
         
         # load ipca
-        data = torch.load('/bags/ipca/ipca_coco_outdoor_12.pt')
+        # data = torch.load('/bags/ipca/ipca_coco_outdoor_12.pt')
+        data = torch.load(data_path)
         self.mean = torch.tensor(data['mean']).to("cuda").float()
         self.V = torch.tensor(data['V']).to("cuda").float()
         
     def set_prompt(self, prompt):
         self.prompts = prompt
         if len(self.prompts) == 1:
-            self.prompts = ['background'] + self.prompts
+            self.prompts = ['grass'] + self.prompts
         self.model = build_model(self.cfg.model, class_names=self.prompts)
         assert os.path.isfile(self.checkpoint_path), "Checkpoint file doesn't exist"        
         self.checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
