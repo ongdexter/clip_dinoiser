@@ -40,10 +40,10 @@ class ClipDino():
         self.mean = torch.tensor(data['mean']).to("cuda").float()
         self.V = torch.tensor(data['V']).to("cuda").float()
         
-    def set_prompt(self, prompt):
+    def set_prompt(self, prompt, background_prompt=['grass']):
         self.prompts = prompt
         if len(self.prompts) == 1:
-            self.prompts = ['grass'] + self.prompts
+            self.prompts = background_prompt + self.prompts
         self.model = build_model(self.cfg.model, class_names=self.prompts)
         assert os.path.isfile(self.checkpoint_path), "Checkpoint file doesn't exist"        
         self.checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
