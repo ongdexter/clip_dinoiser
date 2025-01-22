@@ -25,7 +25,7 @@ class ClipDino():
             # Compose the configuration
             self.cfg = compose(config_name="clip_dinoiser.yaml")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.set_prompt(['monitor'])
+        self.set_prompt('door')
         self.feature_mode = feature_mode
         self.clip_dim = clip_dim
         self.pca_dim = pca_dim
@@ -40,10 +40,16 @@ class ClipDino():
         self.mean = torch.tensor(data['mean']).to("cuda").float()
         self.V = torch.tensor(data['V']).to("cuda").float()
         
-    def set_prompt(self, prompt, background_prompt=['grass']):
-        self.prompts = prompt
-        if len(self.prompts) == 1:
-            self.prompts = background_prompt + self.prompts
+    def set_prompt(self, prompt):
+        # check if prompt contains ','
+        if ',' in prompt:
+            prompts = prompt.split(',')
+            prompt_task = prompts[0]
+            prompt_background = prompts[1]
+        else:
+            prompt_task = prompt
+            prompt_background = 'background'
+        self.prompts = [prompt_background, prompt_task]
         self.model = build_model(self.cfg.model, class_names=self.prompts)
         assert os.path.isfile(self.checkpoint_path), "Checkpoint file doesn't exist"        
         self.checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
