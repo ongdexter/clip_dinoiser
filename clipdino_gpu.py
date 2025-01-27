@@ -132,7 +132,7 @@ class ClipDino():
     def get_pca_features(self, img_tens):
         feat = self.get_clipdino_features(img_tens)
         feat_pca = self.clip_to_pca(feat)
-        return feat_pca
+        return feat_pca, feat
 
     def get_relevancy_from_pca(self, feat_pca):
         feat = self.pca_to_clip(feat_pca)
@@ -167,7 +167,7 @@ class ClipDino():
                         
         elif self.feature_mode == 'pca':
             # get relevancy map
-            feat_pca = self.get_pca_features(img.unsqueeze(0))
+            feat_pca, feat = self.get_pca_features(img.unsqueeze(0))
             
             h, w = img.shape[-2:]
             self.fh, self.fw = feat_pca.shape[-2:]
@@ -176,7 +176,7 @@ class ClipDino():
             if viz:
                 self.viz_pca_features(feat_pca)
             
-            return feat_pca
+            return feat_pca, feat
         
         elif self.feature_mode == 'pca-hash':
             # get relevancy map
